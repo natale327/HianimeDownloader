@@ -608,9 +608,19 @@ class HianimeExtractor:
         # playlist the player actually requested (last one wins)
         masters = [r for r in m3u8_requests if "master" in r["url"]]
         chosen = (masters or m3u8_requests)[-1]
-        headers = dict(chosen["headers"])
-        headers.pop("Host", None)
-        headers.pop("Content-Length", None)
+        raw_headers = dict(chosen["headers"])
+        # yt-dlp's http downloader is strict — extra proxy/browser headers
+        # (Host, Content-Length, Sec-Fetch-*, etc.) cause 403 / 0 blocks on
+        # the CDN. Keep only the ones the CDN actually checks.
+        allowed = {"user-agent", "referer", "origin", "cookie", "accept", "accept-language"}
+        headers = {k: v for k, v in raw_headers.items() if k.lower() in allowed}
+        # ensure a Referer exists — fall back to the watch page / embed origin
+        if "Referer" not in headers and "referer" not in headers:
+            headers["Referer"] = episode["url"]
+        if "User-Agent" not in headers and "user-agent" not in headers:
+            headers["User-Agent"] = self.HEADERS["User-Agent"]
+        # debug hint for the user
+        print(f"{Fore.LIGHTBLACK_EX}  m3u8: {chosen['url'][:120]}")
 
         urls: dict[str, Any] = {
             "m3u8": str(chosen["url"]),
@@ -659,6 +669,8 @@ class HianimeExtractor:
         return urls
 
     def yt_dlp_download(self, url: str, headers: dict[str, str], location: str) -> bool:
+        # yt-dlp's generic extractor needs a valid Referer/UA for the HLS CDN;
+        # noisy headers from selenium-wire (sec-ch-*, Host) break it.
         yt_dlp_options: dict[str, Any] = {
             "no_warnings": False,
             "quiet": False,
@@ -671,6 +683,8 @@ class HianimeExtractor:
             "socket_timeout": 60,
             "force_keyframes_at_cuts": True,
             "allow_unplayable_formats": True,
+            "concurrent_fragment_downloads": 1,
+            "hls_use_mpegts": True,
         }
 
         _return = True
