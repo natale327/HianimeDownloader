@@ -695,8 +695,7 @@ class HianimeExtractor:
         return urls
 
     def yt_dlp_download(self, url: str, headers: dict[str, str], location: str) -> bool:
-        # yt-dlp's generic extractor needs a valid Referer/UA for the HLS CDN;
-        # noisy headers from selenium-wire (sec-ch-*, Host) break it.
+        # kryntal/megaplay CDN rate-limits (429) if fragments are fetched too fast
         yt_dlp_options: dict[str, Any] = {
             "no_warnings": False,
             "quiet": False,
@@ -704,14 +703,23 @@ class HianimeExtractor:
             "format": "best",
             "http_headers": headers,
             "logger": YTDLogger(),
-            "fragment_retries": 10,
-            "retries": 10,
+            "fragment_retries": 30,
+            "retries": 30,
             "socket_timeout": 60,
             "force_keyframes_at_cuts": True,
             "allow_unplayable_formats": True,
             "concurrent_fragment_downloads": 1,
             "hls_use_mpegts": True,
+            "sleep_interval_requests": 1.5,
+            "sleep_interval": 1.5,
+            "max_sleep_interval": 5,
+            "extractor_retries": 5,
+            "file_access_retries": 5,
         }
+        # aria2c handles 429 much better if installed and requested via --aria
+        if self.args.aria:
+            yt_dlp_options["external_downloader"] = "aria2c"
+            yt_dlp_options["external_downloader_args"] = ["-j", "1", "-x", "1", "--retry-wait=5", "--max-tries=10"]
 
         _return = True
         with YoutubeDL(yt_dlp_options) as ydl:
