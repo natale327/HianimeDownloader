@@ -561,6 +561,8 @@ class HianimeExtractor:
                 if (
                     ".m3u8" in low
                     and "thumbnail" not in low
+                    and "ping.gif" not in low
+                    and "jwpltx" not in low
                     and low not in seen_m3u8
                     and low not in self.captured_video_urls
                 ):
@@ -599,8 +601,32 @@ class HianimeExtractor:
                 self.click_server(server_name, anime.download_type)
             time.sleep(1)
 
+        # also try to extract m3u8 from getSources JSON (player returns it there
+        # without a separate .m3u8 request until the iframe fetches it)
+        if not m3u8_requests:
+            for body in sources_bodies:
+                try:
+                    data = json.loads(body)
+                except json.JSONDecodeError:
+                    continue
+                # megaplay/vidtube getSources shape: {"sources": [{"file": "https://....m3u8"}]}
+                for src in data.get("sources") or []:
+                    f = str(src.get("file") or src.get("src") or "")
+                    if ".m3u8" in f and "thumbnail" not in f.lower():
+                        m3u8_requests.append({"url": f, "headers": {"Referer": episode["url"], "User-Agent": self.HEADERS["User-Agent"]}})
+                # some providers nest under data.sources
+                if m3u8_requests:
+                    break
+
         print()
         if not m3u8_requests:
+            # debug: dump what we actually saw
+            print(f"{Fore.LIGHTBLACK_EX}  debug: saw {len(self.driver.requests)} requests")
+            for req in list(self.driver.requests)[-10:]:
+                try:
+                    print(f"    {req.url[:120]}")
+                except Exception:
+                    pass
             print(f"{Fore.LIGHTRED_EX}No .m3u8 streams found.")
             return None
 
