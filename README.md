@@ -1,8 +1,9 @@
 # GDownloader
 
-A simple CLI tool for downloading content from the streaming platform [hianime.to](hianime.to) + [social media platfroms](#supported-platforms). \
-This tool works best if you have a VPN installed with Adblock support, as I have not been able to get a working ad
-blocker working with the chrome session.
+A simple CLI tool for downloading content from the streaming platform [hianime.dk](https://hianime.dk) + [social media platfroms](#supported-platforms). \
+Updated to work with hianime.dk (hianime.to is dead). Search, episode lists and server selection now use the
+site's JSON API directly — the browser is only opened on the player embed page to capture the stream, so ad
+redirects are far less common than before.
 
 ## Requirements
 
@@ -55,7 +56,7 @@ blocker working with the chrome session.
   ```
 
 - After running the `main.py` file, enter the name of the anime you would like to search for
-  from [hianime.to](hianime.to) or provide a link to the content you would like to download
+  from [hianime.dk](https://hianime.dk) or provide a link to the content you would like to download
 
 - If you provided a link you will jump to either the [Downloading from HiAnime](#downloading-from-hianime) or [Downloading from Other](#downloading-from-other-platforms)
 - If you enter a name of an anime it will bring up a selection of anime options from the site, select the desired one with the corresponding number.
