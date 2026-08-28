@@ -290,22 +290,13 @@ class HianimeExtractor:
             seleniumwire_options=seleniumwire_options,
         )
 
-        # Block ad/telemetry hosts at the proxy level so they never load and
-        # never pollute the captured requests
-        self.driver.scopes = [
-            r".*\.doubleclick\.net.*",
-            r".*\.adnxs\.com.*",
-            r".*al5sm\.com.*",
-            r".*255md\.com.*",
-            r".*sharethis\.com.*",
-            r".*googletagmanager\.com.*",
-            r".*google-analytics\.com.*",
-            r".*analytics\.google\.com.*",
-            r".*cloudflareinsights\.com.*",
-            r".*rtmark\.net.*",
-            r".*statlytic\.net.*",
-            r".*connect\.facebook\.net.*",
-        ]
+        # capture everything (including megaplay/vidtube m3u8); ad blocking
+        # is handled via Chrome prefs + JS popup block above, not via scopes
+        # (scopes is a whitelist — setting it to ad hosts would hide m3u8)
+        try:
+            self.driver.scopes = [r".*"]
+        except Exception:
+            pass
 
         self.driver.implicitly_wait(10)
 
