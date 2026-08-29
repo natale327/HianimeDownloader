@@ -1,9 +1,22 @@
 # GDownloader
 
 A simple CLI tool for downloading content from the streaming platform [hianime.dk](https://hianime.dk) + [social media platfroms](#supported-platforms). \
-Updated to work with hianime.dk (hianime.to is dead). Search, episode lists and server selection now use the
-site's JSON API directly — the browser is only opened on the player embed page to capture the stream, so ad
-redirects are far less common than before.
+This is a working fork of [gheatherington/HianimeDownloader](https://github.com/gheatherington/HianimeDownloader) for **hianime.dk** (hianime.to is dead).
+
+## What's fixed in this fork
+
+- Domain updated to `hianime.dk` — search, episode list and server selection now use the site's JSON API
+  (`/api/theme/episode/list/{id}`, `/api/theme/episode/servers?episodeId=`), so the browser is only opened on
+  the player embed page to capture the stream (far fewer ad redirects).
+- Episode list no longer relies on server-rendered `a[data-number]` (removed on the new site); anime id is
+  resolved from the URL slug as a fallback.
+- Fixed m3u8 capture: no more `jwpltx ping.gif` false positives, and m3u8 is also parsed from the
+  `getSources` JSON when needed.
+- Fixed `yt-dlp "Did not get any data blocks"` by stripping selenium-wire headers down to
+  User-Agent / Referer / Cookie.
+- Added rate-limit (HTTP 429) handling: throttled fragment downloads, more retries, and `--aria` support
+  (aria2c) for the `cdn.kryntal.top` CDN.
+- Dropped the `langdetect` dependency.
 
 ## Requirements
 
@@ -15,7 +28,7 @@ redirects are far less common than before.
 1. Download the files from the repository.
 
    ```bash
-   git clone https://github.com/gheatherington/HianimeDownloader
+   git clone https://github.com/natale327/HianimeDownloader
    ```
 
 2. Navigate into the directory it was downloaded to in your terminal.
