@@ -144,7 +144,17 @@ class HianimeExtractor:
 
         self.captured_video_urls: list[str] = []
         self.captured_subtitle_urls: list[str] = []
-        for episode in episodes[start_ep - 1 : end_ep]:
+        selected_episodes = episodes[start_ep - 1 : end_ep]
+
+        folder = (
+            os.path.abspath(self.args.output_dir)
+            + os.sep
+            + anime.name
+            + f" ({anime.download_type[0].upper()}{anime.download_type[1:]}){os.sep}"
+        )
+        os.makedirs(folder, exist_ok=True)
+
+        for episode in selected_episodes:
             number = episode["number"]
             title = episode["title"]
 
@@ -196,45 +206,32 @@ class HianimeExtractor:
                     self.driver.quit()
                     return
 
+            # Download immediately — many CDNs embed a short-lived token in
+            # the m3u8 URL (?token=MTc4...), so batch capture + later download
+            # fails with HTTP 403 by the time yt-dlp runs.
+            if episode.get("m3u8"):
+                name = f"{anime.name} - s{anime.season_number:02}e{episode['number']:02} - {episode['title']}"
+                result = self.yt_dlp_download(
+                    episode["m3u8"], episode["headers"], f"{folder}{name}.mp4"
+                )
+                if not result:
+                    break
+
+                if episode.get("vtt"):
+                    self.yt_dlp_download(
+                        episode["vtt"], episode["headers"], f"{folder}{name}.vtt"
+                    )
+                elif not self.args.no_subtitles:
+                    print(f"Skipping {name}.vtt (No VTT Stream Found)")
+
         self.driver.quit()
         print()
-        self.download_streams(anime, episodes[start_ep - 1 : end_ep])
-
-    def download_streams(self, anime: Anime, episodes: list[dict[str, Any]]):
-        folder = (
-            os.path.abspath(self.args.output_dir)
-            + os.sep
-            + anime.name
-            + f" ({anime.download_type[0].upper()}{anime.download_type[1:]}){os.sep}"
-        )
-        os.makedirs(folder, exist_ok=True)
 
         # Write to JSON file
         with open(
             f"{folder}{anime.name} (Season {anime.season_number}).json", "w"
         ) as json_file:
-            json.dump({**asdict(anime), "episodes": episodes}, json_file, indent=4)
-
-        for episode in episodes:
-            name = f"{anime.name} - s{anime.season_number:02}e{episode['number']:02} - {episode['title']}"
-            if not episode.get("m3u8"):
-                print(f"Skipping {name} (No M3U8 Stream Found)")
-                continue
-
-            result = self.yt_dlp_download(
-                episode["m3u8"],
-                episode["headers"],
-                f"{folder}{name}.mp4",
-            )
-            if not result:
-                break
-
-            if episode.get("vtt"):
-                self.yt_dlp_download(
-                    episode["vtt"], episode["headers"], f"{folder}{name}.vtt"
-                )
-            elif not self.args.no_subtitles:
-                print(f"Skipping {name}.vtt (No VTT Stream Found)")
+            json.dump({**asdict(anime), "episodes": selected_episodes}, json_file, indent=4)
 
     @staticmethod
     def get_download_type():
@@ -528,6 +525,32 @@ class HianimeExtractor:
         except Exception:
             return None
 
+    def _nudge_player(self) -> None:
+        """Enter the embed iframe and force playback (some providers wait for
+        a user gesture before loading the m3u8)."""
+        nudge_js = """
+            var vids = document.querySelectorAll('video');
+            for (var i = 0; i < vids.length; i++) {
+                try { vids[i].muted = true; vids[i].play(); } catch (e) {}
+            }
+            if (window.jwplayer) { try { jwplayer().play(); } catch (e) {} }
+            var p = document.querySelector('.jwplayer, .video-js, #megaplay-player');
+            if (p) { try { p.click(); } catch (e) {} }
+        """
+        try:
+            for frame in self.driver.find_elements(By.TAG_NAME, "iframe"):
+                try:
+                    self.driver.switch_to.frame(frame)
+                    self.driver.execute_script(nudge_js)
+                    self.driver.switch_to.default_content()
+                except Exception:
+                    try:
+                        self.driver.switch_to.default_content()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     def capture_media_requests(
         self, episode: dict[str, Any], server_name: str, anime: Anime
     ) -> dict[str, Any] | None:
@@ -596,6 +619,10 @@ class HianimeExtractor:
                 break
 
             attempt += 1
+            # some providers (vivibebe.site etc.) don't autoplay inside the
+            # iframe — nudge the player with a real click at fixed attempts
+            if not found_m3u8 and attempt in (6, 12):
+                self._nudge_player()
             if attempt in self.DOWNLOAD_REFRESH:
                 self.driver.refresh()
                 self.click_server(server_name, anime.download_type)
